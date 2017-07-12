@@ -12,9 +12,7 @@ This reference architecture shows a set of proven practices for running SAP HANA
 ![0][0]
 
 > [!NOTE]
-> - SAP HANA is certified for production OLAP workloads on Azure GS5-series virtual machines. This reference architecture is for Azure virtual machines in the G-series and M-series and differs from [SAP HANA on Azure Large Instances][azure-large-instances].
-> - Deploying this reference architecture requires appropriate licensing of SAP products and other non-Microsoft technologies.
-> - For information about the partnership between Microsoft and SAP, see [SAP HANA on Azure][sap-hana-on-azure]. 
+> - Deploying this reference architecture requires appropriate licensing of SAP products and other non-Microsoft technologies. For information about the partnership between Microsoft and SAP, see [SAP HANA on Azure][sap-hana-on-azure]. 
 >
 
 ## Architecture
@@ -23,11 +21,12 @@ The architecture consists of the following components.
 
 - **Virtual network**. A VNet is a representation of a logically isolated network in Azure. All of the VMs in this reference architecture are deployed to the same VNet. The VNet is further subdivided into subnets. Create a separate subnet for each tier: application (SAP NetWeaver), database (SAP HANA), management (the jumpbox), and Active Directory.
 
-- **Virtual machines (VMs)**.  The VMs for this architecture are grouped into several distinct tiers.
+- **Virtual machines (VMs)**. .
+ The VMs for this architecture are grouped into several distinct tiers.
 
     - **SAP NetWeaver**. Includes SAP ASCS, SAP Web Dispatcher, and the SAP application servers. 
     
-    - **SAP HANA**. This reference architecture uses SAP HANA for the database tier.
+    - **SAP HANA**. This reference architecture uses SAP HANA for the database tier, running on a single [GS5][vm-sizes-mem] instance. SAP HANA is certified for production OLAP workloads on GS5 or [SAP HANA on Azure Large Instances][azure-large-instances]. This reference architecture is for Azure virtual machines in the G-series and M-series. For information about SAP HANA on Azure Large Instances, see [SAP HANA (large instances) overview and architecture on Azure][azure-large-instances].
    
     - **Jumpbox**. Also called a bastion host. This is a secure VM on the network that administrators use to connect to the other VMs. 
      
@@ -49,7 +48,7 @@ The architecture consists of the following components.
 
 - **Network security groups**. To restrict traffic between the various subnets in the virtual network, you can create [network security groups][nsg] (NSGs).
 
- - **VPN Gateway.** This reference architecture deploys a VPN Gateway to extend your on-premises network to the Azure VNet. Alternatively, consider using [ExpressRoute][expressroute], which uses a dedicated private connection that does not go over the  public Internet.
+- **VPN Gateway.** This reference architecture deploys a VPN Gateway to extend your on-premises network to the Azure VNet. Alternatively, consider using [ExpressRoute][expressroute], which uses a dedicated private connection that does not go over the public Internet.
 
 ## Recommendations
 
@@ -259,6 +258,7 @@ After deploying the SAP infrastructure, install and configure your SAP applicati
 [sap-netweaver-dr]: http://download.microsoft.com/download/9/5/6/956FEDC3-702D-4EFB-A7D3-2DB7505566B6/SAP%20NetWeaver%20-%20Building%20an%20Azure%20based%20Disaster%20Recovery%20Solution%20V1_5%20.docx
 [sap-security]: https://archive.sap.com/documents/docs/DOC-62943
 [sla]: https://azure.microsoft.com/support/legal/sla/virtual-machines
+[vm-sizes-mem]: /azure/virtual-machines/windows/sizes-memory
 [stack-overflow]: http://stackoverflow.com/tags/sap/info
 [swd]: https://help.sap.com/doc/saphelp_nw70ehp2/7.02.16/en-us/48/8fe37933114e6fe10000000a421937/frameset.htm
 [template-bb]: https://github.com/mspnp/template-building-blocks/wiki
