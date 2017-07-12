@@ -12,8 +12,7 @@ This reference architecture shows a set of proven practices for running SAP HANA
 ![0][0]
 
 > [!NOTE]
-> - Deploying this reference architecture requires appropriate licensing of SAP products and other non-Microsoft technologies. For information about the partnership between Microsoft and SAP, see [SAP HANA on Azure][sap-hana-on-azure]. 
->
+> Deploying this reference architecture requires appropriate licensing of SAP products and other non-Microsoft technologies. For information about the partnership between Microsoft and SAP, see [SAP HANA on Azure][sap-hana-on-azure].
 
 ## Architecture
 
@@ -34,21 +33,15 @@ The architecture consists of the following components.
  
 - **Availability sets**. Place the VMs for the SAP Web Dispatcher, SAP application server, and SAP ACSC roles into separate availability sets, and provision at least two virtual machines (VMs) for each role. This makes the VMs eligible for a higher service level agreement (SLA).
     
-- **Windows Server Failover Cluster**. The VMs that run SAP ACSC are configured as a failover cluster for high availability. 
-    
-    To support the failover cluster, SIOS DataKeeper Cluster Edition performs the cluster shared volume (CSV) function by replicating independent disks owned by the cluster nodes. For details, see [Running SAP applications on the Microsoft platform][running-sap].
+- **Windows Server Failover Cluster**. The VMs that run SAP ACSC are configured as a failover cluster for high availability. To support the failover cluster, SIOS DataKeeper Cluster Edition performs the cluster shared volume (CSV) function by replicating independent disks owned by the cluster nodes. For details, see [Running SAP applications on the Microsoft platform][running-sap].
     
 - **Load balancers.** Two [Azure Load Balancer][azure-lb] instances are used. The first, shown on the left of the diagram, distributes traffic to the SAP Web Dispatcher VMs. This configuration implements the parallel web dispatcher option described in [High Availability of the SAP Web Dispatcher][sap-dispatcher-ha]. The second load balancer, shown on the right, enables failover in the Windows Server Failover Cluster, by directing incoming connections to the active/healthy node.
 
-    Load balancing of traffic to the application servers is handled within SAP. SMLG is an SAP ABAP transaction used to manage the logon load balancing capability of SAP Central Services. The backend pool of the logon group has more than one ABAP application server. 
-     
-    Clients accessing ASCS cluster services connect to the Azure load balancer through a frontend IP address. The ASCS cluster virtual network name also has an IP address. Optionally, this address can be associated with an additional IP address on the Azure load balancer, so that the cluster can be managed remotely.  
-    
-- **NICs.** The VMs that run SAP NetWeaver require two network interfaces (NICs). One NIC is for data communication and is assigned to the NetWeaver subnet. The other is for administration and is assigned to the management subnet. See [Recommendations](#recommendations) below for more information.
+- **NICs.** The VMs that run SAP NetWeaver require two network interfaces (NICs). Assign one NIC to the NetWeaver subnet, and the other to the management subnet. See [Recommendations](#recommendations) below for more information.
 
-- **Network security groups**. To restrict traffic between the various subnets in the virtual network, you can create [network security groups][nsg] (NSGs).
+- **Network security groups**. Use [network security groups][nsg] (NSGs) to restrict traffic between the various subnets in the VNet.
 
-- **VPN Gateway.** This reference architecture deploys a VPN Gateway to extend your on-premises network to the Azure VNet. Alternatively, consider using [ExpressRoute][expressroute], which uses a dedicated private connection that does not go over the public Internet.
+- **VPN Gateway.** This reference architecture deploys a VPN Gateway to extend your on-premises network to the Azure VNet. Alternatively, consider using ExpressRoute, which uses a dedicated private connection that does not go over the public Internet. For more information, see [Connect an on-premises network to Azure using ExpressRoute][expressroute].
 
 ## Recommendations
 
@@ -58,17 +51,19 @@ Your requirements might differ from the architecture described here. Use these r
 
 [SAP Web Dispatcher][sap-dispatcher] handles load balancing of HTTP(S) traffic to dual-stack servers (ABAP and Java). SAP has advocated single-stack application servers for years, so very few applications run on a dual-stack deployment model nowadays. The Azure Load Balancer depicted in the architecture diagram implements the high availability cluster for the SAP Web Dispatcher.
 
-For traffic from SAPGUI clients connecting a SAP server via DIAG and Remote Function Calls (RFC), the SCS message server balances the load by creating SAP App Server [Logon Groups][logon-groups], so no additional load balancer is needed. 
+Load balancing of traffic to the application servers is handled within SAP. For traffic from SAPGUI clients connecting a SAP server via DIAG and Remote Function Calls (RFC), the SCS message server balances the load by creating SAP App Server [Logon Groups][logon-groups]. 
+
+SMLG is an SAP ABAP transaction used to manage the logon load balancing capability of SAP Central Services. The backend pool of the logon group has more than one ABAP application server. Clients accessing ASCS cluster services connect to the Azure load balancer through a frontend IP address. The ASCS cluster virtual network name also has an IP address. Optionally, this address can be associated with an additional IP address on the Azure load balancer, so that the cluster can be managed remotely.  
 
 ### NICs
 
-SAP landscape management functions require segregation of server traffic on different NICs. For example, business data should be separated from administrative traffic and backup traffic. Assigning multiple NICs to different subnets enables this data segregation. For more information, see the section titled in "Network" in [Building High Availability for SAP NetWeaver and SAP HANA][sap-ha] (PDF).
+SAP landscape management functions require segregation of server traffic on different NICs. For example, business data should be separated from administrative traffic and backup traffic. Assigning multiple NICs to different subnets enables this data segregation. For more information, see "Network" in [Building High Availability for SAP NetWeaver and SAP HANA][sap-ha] (PDF).
 
-To segregate the traffic in a VM, assign each NIC to a separate subnet. For example, for the SAP application servers, assign the data communication NIC to the application server subnet, and assigned the administration NIC to the management subnet. For configuration details, see [Create and manage a Windows virtual machine that has multiple NICs][multiple-vm-nics].
+he SAP application servers, assign the data communication NIC to the SAP NetWeaver subnet, and assign the administration NIC to the management subnet. For configuration details, see [Create and manage a Windows virtual machine that has multiple NICs][multiple-vm-nics].
 
 ### Azure Storage
 
-With all database server virtual machines, we recommend using Azure Premium Storage for consistent read/write latency. For SAP application servers, including the (A)SCS virtual machines, you can use Azure Standard Storage, because application execution takes place in memory and uses disks for logging only.
+With all database server VMs, we recommend using Azure Premium Storage for consistent read/write latency. For SAP application servers, including the (A)SCS virtual machines, you can use Azure Standard Storage, because application execution takes place in memory and uses disks for logging only.
 
 For best reliability, we recommend using [Azure Managed Disks][managed-disks]. Managed disks ensure that the disks for VMs within an availability set are isolated to avoid single points of failure.
 
@@ -87,8 +82,6 @@ For SAP HANA on Azure virtual machines with both OLTP and OLAP SAP applications,
 
 ## Availability considerations
 
-This reference architecture deploys a single instance database on Azure GS5-series virtual machines. The database tier's native system replication feature provides either manual or automatic failover between replicated nodes. To further lower unplanned downtime on Linux-based database systems, a high availability extension for the specific Linux distribution is required.
-
 In this distributed installation of the SAP application on a centralized database, the base installation is replicated to achieve high availability. For each layer of the architecture, the high availability design varies depending on the components as follows:
 
 - **Web Dispatcher.** High availability is achieved with redundant SAP Web Dispatcher instances with SAP application traffic. See [SAP Web Dispatcher][swd] in the SAP Documentation.
@@ -101,7 +94,7 @@ In this distributed installation of the SAP application on a centralized databas
 
 ### Disaster recovery considerations
 
-In an SAP three-tier deployment, each tier uses a different strategy to provide disaster recovery (DR) protection.
+Each tier uses a different strategy to provide disaster recovery (DR) protection.
 
 - **Application servers tier.** SAP application servers don't contain business data. On Azure, a simple DR strategy is to create SAP application servers in another region. Upon any configuration changes or kernel updates on the primary application server, the same changes must be copied to VMs in the DR region. For example, the kernel executables copied to the DR VMs.
 
@@ -130,19 +123,10 @@ For SAP HANA data-at-rest encryption, we recommend using the SAP HANA native enc
 > [!NOTE]
 > Don't use the HANA data-at-rest encryption with Azure disk encryption on the same server.
 
-## Communities
-Communities can answer questions and help you set up a successful deployment. Consider the following:
-
-* [Running SAP Applications on the Microsoft Platform Blog][running-sap-blog]
-* [Azure Forum][azure-forum]
-* [SAP Community][sap-community]
-* [Stack Overflow SAP][stack-overflow]
-
 ## Solution deployment
 A deployment for this reference architecture is available on [GitHub][gitnub]. It includes documentation in Markdown format as well as code artifacts for the deployment.
 
 > [!NOTE]
-> 
 > You need access to the SAP Software Download Center to carry out the application and HANA database installations.
 
 ### Prerequisites
@@ -217,38 +201,26 @@ After deploying the SAP infrastructure, install and configure your SAP applicati
     2.  Repeat for the rest of the virtual machines named **ra-sapApps-vmN** (where N is an incrementing number based on the number of virtual machines you deployed).
   
 
-
-
 [azure-cli]: https://docs.microsoft.com/en-us/cli/azure/install-azure-cli
-[azure-forum]: https://azure.microsoft.com/en-us/support/forums/
 [azure-large-instances]: /azure/virtual-machines/workloads/sap/hana-overview-architecture
 [azure-lb]: /azure/load-balancer/load-balancer-overview
-[azure-storage]: /azure/storage/storage-standard-storage
-[azure-trust-center]: https://azure.microsoft.com/en-us/support/trust-center/
 [backup-faq]: /azure/backup/backup-azure-backup-faq
 [clustering]: https://blogs.msdn.microsoft.com/saponsqlserver/2015/05/20/clustering-sap-ascs-instance-using-windows-server-failover-cluster-on-microsoft-azure-with-sios-datakeeper-and-azure-internal-load-balancer/
 [cool-blob-storage]: /azure/storage/storage-blob-storage-tiers
 [disk-encryption]: /azure/security/azure-security-disk-encryption
 [expressroute]: /azure/architecture/reference-architectures/hybrid-networking/expressroute
-[filter-network]: https://azure.microsoft.com/en-us/blog/multiple-vm-nics-and-network-virtual-appliances-in-azure/
 [github]: https://github.com/mspnp/reference-architectures/tree/master/sap/sap-hana
 [hana-backup]: /azure/virtual-machines/workloads/sap/sap-hana-backup-guide
 [hana-guide]: https://help.sap.com/viewer/2c1988d620e04368aa4103bf26f17727/2.0.01/en-US/7eb0167eb35e4e2885415205b8383584.html
-[ilb]: /azure/load-balancer/load-balancer-internal-overview
 [logon-groups]: https://wiki.scn.sap.com/wiki/display/SI/ABAP+Logon+Group+based+Load+Balancing
 [managed-disks]: /azure/storage/storage-managed-disks-overview
 [monitoring]: /azure/architecture/best-practices/monitoring
 [multiple-vm-nics]: /azure/virtual-machines/windows/multiple-nics
 [netweaver-on-azure]: /azure/virtual-machines/workloads/sap/planning-guide
-[nsg]: /azure/virtual-network/virtual-networks-n
-[planning]: /azure/vpn-gateway/vpn-gateway-plan-design
-[protecting-sap]: https://blogs.msdn.microsoft.com/saponsqlserver/2016/05/06/protecting-sap-systems-running-on-vmware-with-azure-site-recovery/
-[ref-arch]: /azure/architecture/reference-architectures/
+[nsg]: /azure/virtual-network/virtual-networks-nsg
 [running-SAP]: https://blogs.msdn.microsoft.com/saponsqlserver/2016/06/07/sap-on-sql-general-update-for-customers-partners-june-2016/
-[running-sap-blog]: https://blogs.msdn.microsoft.com/saponsqlserver/2017/05/04/sap-on-azure-general-update-for-customers-partners-april-2017/
 [sap-1943937]: https://launchpad.support.sap.com/#/notes/1943937
 [sap-1928533]: https://launchpad.support.sap.com/#/notes/1928533
-[sap-community]: https://www.sap.com/community.html
 [sap-dispatcher]: https://help.sap.com/doc/saphelp_nw73ehp1/7.31.19/en-US/48/8fe37933114e6fe10000000a421937/frameset.htm
 [sap-dispatcher-ha]: https://help.sap.com/doc/saphelp_nw73ehp1/7.31.19/en-US/48/9a9a6b48c673e8e10000000a42189b/frameset.htm
 [sap-dispatcher-install]: https://wiki.scn.sap.com/wiki/display/SI/Web+Dispatcher+Installation
@@ -257,10 +229,6 @@ After deploying the SAP infrastructure, install and configure your SAP applicati
 [sap-hana-on-azure]: https://azure.microsoft.com/en-us/services/virtual-machines/sap-hana/
 [sap-netweaver-dr]: http://download.microsoft.com/download/9/5/6/956FEDC3-702D-4EFB-A7D3-2DB7505566B6/SAP%20NetWeaver%20-%20Building%20an%20Azure%20based%20Disaster%20Recovery%20Solution%20V1_5%20.docx
 [sap-security]: https://archive.sap.com/documents/docs/DOC-62943
-[sla]: https://azure.microsoft.com/support/legal/sla/virtual-machines
 [vm-sizes-mem]: /azure/virtual-machines/windows/sizes-memory
-[stack-overflow]: http://stackoverflow.com/tags/sap/info
 [swd]: https://help.sap.com/doc/saphelp_nw70ehp2/7.02.16/en-us/48/8fe37933114e6fe10000000a421937/frameset.htm
-[template-bb]: https://github.com/mspnp/template-building-blocks/wiki
-[white-papers]: https://azure.microsoft.com/en-us/blog/azure-compliance-white-paper-o-rama/
 [0]: ./images/sap-hana.png "SAP HANA architecture using Microsoft Azure"
