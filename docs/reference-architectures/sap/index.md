@@ -21,9 +21,9 @@ This reference architecture shows a set of proven practices for running SAP HANA
 
 The architecture consists of the following components.
 
-- **Virtual network**. A VNet is a representation of a logically isolated network in Azure. All of the VMs in this reference architecture are deployed to the same VNet. The VNet is further subdivided into subnets. 
+- **Virtual network**. A VNet is a representation of a logically isolated network in Azure. All of the VMs in this reference architecture are deployed to the same VNet. The VNet is further subdivided into subnets. Create a separate subnet for each tier: application (SAP NetWeaver), database (SAP HANA), management (the jumpbox), and Active Directory.
 
-- **Virtual machines (VMs)**.  
+- **Virtual machines (VMs)**.  The VMs for this architecture are grouped into several distinct tiers.
 
     - **SAP NetWeaver**. Includes SAP ASCS, SAP Web Dispatcher, and the SAP application servers. 
     
@@ -33,21 +33,23 @@ The architecture consists of the following components.
      
     - **Windows Server Active Directory (AD) domain controllers.** The domain controllers are used to configure the Windows Server Failover Cluster (see below).
  
-- **Windows Server Failover Cluster**. The VMs that run SAP ACSC are configured as a failover cluster for high availability. 
-    
 - **Availability sets**. Place the VMs for the SAP Web Dispatcher, SAP application server, and SAP ACSC roles into separate availability sets, and provision at least two virtual machines (VMs) for each role. This makes the VMs eligible for a higher service level agreement (SLA).
     
-- **Load balancers.** The SAP Web Dispatcher component is used as a load balancer  for SAP traffic among the SAP application servers. To achieve high availability of the SWD component, the [Azure Load Balancer][azure-lb] is used to implement the parallel web dispatcher configuration described in the [High Availability of the SAP Web Dispatcher][sap-dispatcher-ha] article.  In this case, the Azure load balancer is configured in a round robin configuration for HTTP(S) traffic distribution among the available SWDs in the cluster or balancers pool. 
+- **Windows Server Failover Cluster**. The VMs that run SAP ACSC are configured as a failover cluster for high availability. 
+    
+    To support the failover cluster, SIOS DataKeeper Cluster Edition performs the cluster shared volume (CSV) function by replicating independent disks owned by the cluster nodes. For details, see [Running SAP applications on the Microsoft platform][running-sap].
+    
+- **Load balancers.** Two [Azure Load Balancer][azure-lb] instances are used. The first, shown on the left of the diagram, distributes traffic to the SAP Web Dispatcher VMs. This configuration implements the parallel web dispatcher option described in [High Availability of the SAP Web Dispatcher][sap-dispatcher-ha]. The second load balancer, shown on the right, enables failover in the Windows Server Failover Cluster, by directing incoming connections to the active/healthy node.
 
-- **SMLG.** The internal load balancer in ABAP Central Services (ASCS) is used for balancing the SAP application server pool for SAPGUI and RFC traffic. An Azure [internal load balancer][ilb] is also used to implement the ASCS Windows Server Failover Cluster (WSFC). The application server connection to the highly available ASCS is through the cluster virtual network name. Assigning the cluster virtual network name to the endpoint of this internal load balancer is optional.
+    Load balancing of traffic to the application servers is handled within SAP. SMLG is an SAP ABAP transaction used to manage the logon load balancing capability of SAP Central Services. The backend pool of the logon group has more than one ABAP application server. 
+     
+    Clients accessing ASCS cluster services connect to the Azure load balancer through a frontend IP address. The ASCS cluster virtual network name also has an IP address. Optionally, this address can be associated with an additional IP address on the Azure load balancer, so that the cluster can be managed remotely.  
     
 - **NICs.** The VMs that run SAP NetWeaver require two network interfaces (NICs). One NIC is for data communication and is assigned to the NetWeaver subnet. The other is for administration and is assigned to the management subnet. See [Recommendations](#recommendations) below for more information.
 
 - **Network security groups**. To restrict traffic between the various subnets in the virtual network, you can create [network security groups][nsg] (NSGs).
 
  - **VPN Gateway.** This reference architecture deploys a VPN Gateway to extend your on-premises network to the Azure VNet. Alternatively, consider using [ExpressRoute][expressroute], which uses a dedicated private connection that does not go over the  public Internet.
-
-- **SIOS DataKeeper**. To support the WSFC environment, SIOS DataKeeper Cluster Edition performs the cluster shared volume (CSV) function by replicating independent disks owned by the cluster nodes. For details, see “3. Important Update for SAP Customers Running ASCS on SIOS on Azure” at [Running SAP applications on the Microsoft platform][running-sap].
 
 ## Recommendations
 
@@ -88,25 +90,21 @@ For SAP HANA on Azure virtual machines with both OLTP and OLAP SAP applications,
 
 This reference architecture deploys a single instance database on Azure GS5-series virtual machines. The database tier's native system replication feature provides either manual or automatic failover between replicated nodes. To further lower unplanned downtime on Linux-based database systems, a high availability extension for the specific Linux distribution is required.
 
-The common practice for achieving high availability is through redundancy of critical components. In this distributed installation of the SAP application on a centralized database, the base installation is replicated to achieve high availability. For each layer of the architecture, the high availability design varies depending on the components as follows:
+In this distributed installation of the SAP application on a centralized database, the base installation is replicated to achieve high availability. For each layer of the architecture, the high availability design varies depending on the components as follows:
 
 - **Web Dispatcher.** High availability is achieved with redundant SAP Web Dispatcher instances with SAP application traffic. See [SAP Web Dispatcher][swd] in the SAP Documentation.
 
-- **ASCS.** For high availability of ASCS on Azure Windows virtual machines, WSFC is used with SIOS DataKeeper to implement the cluster shared volume. For implementation details, see [Clustering SAP ASCS on Azure][clustering].
+- **ASCS.** For high availability of ASCS on Azure Windows virtual machines, Windows Sever Failover Clustering is used with SIOS DataKeeper to implement the cluster shared volume. For implementation details, see [Clustering SAP ASCS on Azure][clustering].
 
 - **Application servers.** High availability is achieved by load balancing traffic within a pool of application servers.
 
-- **Database tier.** This reference architecture deploys a single instance database on Azure GS5-series virtual machines. The database tier's native system replication feature provides either manual or automatic failover between replicated nodes. To further lower unplanned downtime on Linux-based database systems, a high availability extension for the specific Linux distribution is required.
-
- 
- 
-- For SAP HANA running on Azure, the common approach to high availability is to implement HSR (not implemented by this deployment). This replication solution doesn't offer automatic failover. To do that, use additional HA extensions from the Linux distribution.
+- **Database tier.** This reference architecture deploys a single SAP HANA database instance. For high availability, deploy more than one instance and use HANA System Replication (HSR) to implement manual failover. To enable automatic failover, an HA extension for the specific Linux distribution is required.
 
 ### Disaster recovery considerations
 
 In an SAP three-tier deployment, each tier uses a different strategy to provide disaster recovery (DR) protection.
 
-- **Application servers tier.** SAP application servers don't contain business data. On Azure, a simple DR strategy is to create SAP application servers in the DR region, then shut them down. Upon any configuration changes or kernel updates on the primary application server, the same changes must be copied to VMs in the DR region. For example, the kernel executables copied to the DR VMs.
+- **Application servers tier.** SAP application servers don't contain business data. On Azure, a simple DR strategy is to create SAP application servers in another region. Upon any configuration changes or kernel updates on the primary application server, the same changes must be copied to VMs in the DR region. For example, the kernel executables copied to the DR VMs.
 
 - **SAP Central Services.** This component of the SAP application stack also doesn't persist business data. You can build a VM in the DR region to run the SCS role. The only content from the primary SCS node to synchronize is the **/sapmnt** share content. Also, if configuration changes or kernel updates take place on the primary SCS servers, they must be repeated on the DR SCS. To synchronize the two servers, simply use a regularly scheduled copy job to copy **/sapmnt** to the DR side. For details about the build, copy, and test failover process, download [SAP NetWeaver: Building a Hyper-V and Microsoft Azure–based Disaster Recovery Solution][sap-netweaver-dr], and refer to "4.3. SAP SPOF layer (ASCS)."
 
